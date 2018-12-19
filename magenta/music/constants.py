@@ -18,6 +18,9 @@ DEFAULT_QUARTERS_PER_MINUTE = 120.0
 DEFAULT_STEPS_PER_BAR = 16  # 4/4 music sampled at 4 steps per quarter note.
 DEFAULT_STEPS_PER_QUARTER = 4
 
+# Default absolute quantization.
+DEFAULT_STEPS_PER_SECOND = 100
+
 # Standard pulses per quarter.
 # https://en.wikipedia.org/wiki/Pulses_per_quarter_note
 STANDARD_PPQ = 220
@@ -34,8 +37,23 @@ MIN_MIDI_PITCH = 0  # Inclusive.
 MAX_MIDI_PITCH = 127  # Inclusive.
 NOTES_PER_OCTAVE = 12
 
+# Velocity-related constants.
+MIN_MIDI_VELOCITY = 1  # Inclusive.
+MAX_MIDI_VELOCITY = 127  # Inclusive.
+
+# Program-related constants.
+MIN_MIDI_PROGRAM = 0
+MAX_MIDI_PROGRAM = 127
+
+# MIDI programs that typically sound unpitched.
+UNPITCHED_PROGRAMS = (
+    list(range(96, 104)) + list(range(112, 120)) + list(range(120, 128)))
+
 # Chord symbol for "no chord".
 NO_CHORD = 'N.C.'
+
+# The indices of the pitch classes in a major scale.
+MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11]
 
 # NOTE_KEYS[note] = The major keys that note belongs to.
 # ex. NOTE_KEYS[0] lists all the major keys that contain the note C,
@@ -58,8 +76,7 @@ NO_CHORD = 'N.C.'
 #
 # NOTE_KEYS can be generated using the code below, but is explicitly declared
 # for readability:
-# scale = [1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1]
-# NOTE_KEYS = [[j for j in range(12) if scale[(i - j) % 12]]
+# NOTE_KEYS = [[j for j in range(12) if (i - j) % 12 in MAJOR_SCALE]
 #              for i in range(12)]
 NOTE_KEYS = [
     [0, 1, 3, 5, 7, 8, 10],

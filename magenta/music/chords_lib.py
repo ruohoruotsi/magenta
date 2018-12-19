@@ -20,6 +20,10 @@ Use ChordProgression.to_sequence to write a chord progression to a
 NoteSequence proto, encoding the chords as text annotations.
 """
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import abc
 import copy
 
@@ -132,7 +136,7 @@ class ChordProgression(events_lib.SimpleEventSequence):
           steps.
       CoincidentChordsException: If any of the chords start on the same step.
     """
-    sequences_lib.assert_is_quantized_sequence(quantized_sequence)
+    sequences_lib.assert_is_relative_quantized_sequence(quantized_sequence)
     self._reset()
 
     steps_per_bar_float = sequences_lib.steps_per_bar_in_quantized_sequence(
@@ -177,16 +181,22 @@ class ChordProgression(events_lib.SimpleEventSequence):
 
       if chord.quantized_step > start_step:
         # Add the previous chord.
-        start_index = max(prev_step, start_step) - start_step
+        if prev_step is None:
+          start_index = 0
+        else:
+          start_index = max(prev_step, start_step) - start_step
         end_index = chord.quantized_step - start_step
         self._add_chord(prev_figure, start_index, end_index)
 
       prev_step = chord.quantized_step
       prev_figure = chord.text
 
-    if prev_step < end_step:
+    if prev_step is None or prev_step < end_step:
       # Add the last chord active before end_step.
-      start_index = max(prev_step, start_step) - start_step
+      if prev_step is None:
+        start_index = 0
+      else:
+        start_index = max(prev_step, start_step) - start_step
       end_index = end_step - start_step
       self._add_chord(prev_figure, start_index, end_index)
 
@@ -226,24 +236,21 @@ class ChordProgression(events_lib.SimpleEventSequence):
 
     return sequence
 
-  def transpose(self, transpose_amount, chord_symbol_functions=
-                chord_symbols_lib.ChordSymbolFunctions.get()):
+  def transpose(self, transpose_amount):
     """Transpose chords in this ChordProgression.
 
     Args:
       transpose_amount: The number of half steps to transpose this
           ChordProgression. Positive values transpose up. Negative values
           transpose down.
-      chord_symbol_functions: ChordSymbolFunctions object with which to perform
-          the actual transposition of chord symbol strings.
 
     Raises:
       ChordSymbolException: If a chord (other than "no chord") fails to be
-          interpreted by the ChordSymbolFunctions object.
+          interpreted by the `chord_symbols_lib` module.
     """
-    for i in xrange(len(self._events)):
+    for i in range(len(self._events)):
       if self._events[i] != NO_CHORD:
-        self._events[i] = chord_symbol_functions.transpose_chord_symbol(
+        self._events[i] = chord_symbols_lib.transpose_chord_symbol(
             self._events[i], transpose_amount % NOTES_PER_OCTAVE)
 
 
@@ -269,7 +276,7 @@ def extract_chords(quantized_sequence, max_steps=None,
         for each transposition.
     stats: A dictionary mapping string names to `statistics.Statistic` objects.
   """
-  sequences_lib.assert_is_quantized_sequence(quantized_sequence)
+  sequences_lib.assert_is_relative_quantized_sequence(quantized_sequence)
 
   stats = dict([('chords_truncated', statistics.Counter('chords_truncated'))])
   chords = ChordProgression()
@@ -320,7 +327,69 @@ def extract_chords_for_melodies(quantized_sequence, melodies):
       chords = None
     chord_progressions.append(chords)
 
-  return chord_progressions, stats.values()
+  return chord_progressions, list(stats.values())
+
+
+def event_list_chords(quantized_sequence, event_lists):
+  """Extract corresponding chords for multiple EventSequences.
+
+  Args:
+    quantized_sequence: The underlying quantized NoteSequence from which to
+        extract the chords. It is assumed that the step numbering in this
+        sequence matches the step numbering in each EventSequence in
+        `event_lists`.
+    event_lists: A list of EventSequence objects.
+
+  Returns:
+    A nested list of chord the same length as `event_lists`, where each list is
+    the same length as the corresponding EventSequence (in events, not steps).
+  """
+  sequences_lib.assert_is_relative_quantized_sequence(quantized_sequence)
+
+  chords = ChordProgression()
+  if quantized_sequence.total_quantized_steps > 0:
+    chords.from_quantized_sequence(
+        quantized_sequence, 0, quantized_sequence.total_quantized_steps)
+
+  pad_chord = chords[-1] if chords else NO_CHORD
+
+  chord_lists = []
+  for e in event_lists:
+    chord_lists.append([chords[step] if step < len(chords) else pad_chord
+                        for step in e.steps])
+
+  return chord_lists
+
+
+def add_chords_to_sequence(note_sequence, chords, chord_times):
+  """Add chords to a NoteSequence at specified times.
+
+  Args:
+    note_sequence: The NoteSequence proto to which chords will be added (in
+        place). Should not already have chords.
+    chords: A Python list of chord figure strings to add to `note_sequence` as
+        text annotations.
+    chord_times: A Python list containing the time in seconds at which to add
+        each chord. Should be the same length as `chords` and nondecreasing.
+
+  Raises:
+    ValueError: If `note_sequence` already has chords, or if `chord_times` is
+        not sorted in ascending order.
+  """
+  if any(ta.annotation_type == CHORD_SYMBOL
+         for ta in note_sequence.text_annotations):
+    raise ValueError('NoteSequence already has chords.')
+  if any(t1 > t2 for t1, t2 in zip(chord_times[:-1], chord_times[1:])):
+    raise ValueError('Chord times not sorted in ascending order.')
+
+  current_chord = None
+  for chord, time in zip(chords, chord_times):
+    if chord != current_chord:
+      current_chord = chord
+      ta = note_sequence.text_annotations.add()
+      ta.annotation_type = CHORD_SYMBOL
+      ta.time = time
+      ta.text = chord
 
 
 class ChordRenderer(object):
@@ -349,9 +418,7 @@ class BasicChordRenderer(ChordRenderer):
                instrument=1,
                program=88,
                octave=4,
-               bass_octave=3,
-               chord_symbol_functions=
-               chord_symbols_lib.ChordSymbolFunctions.get()):
+               bass_octave=3):
     """Initialize a BasicChordRenderer object.
 
     Args:
@@ -361,15 +428,12 @@ class BasicChordRenderer(ChordRenderer):
       octave: The octave in which to render chord notes. If the bass note is not
           otherwise part of the chord, it will not be rendered in this octave.
       bass_octave: The octave in which to render chord bass notes.
-      chord_symbol_functions: ChordSymbolFunctions object with which to perform
-          the actual transposition of chord symbol strings.
     """
     self._velocity = velocity
     self._instrument = instrument
     self._program = program
     self._octave = octave
     self._bass_octave = bass_octave
-    self._chord_symbol_functions = chord_symbol_functions
 
   def _render_notes(self, sequence, pitches, bass_pitch, start_time, end_time):
     all_pitches = []
@@ -401,10 +465,8 @@ class BasicChordRenderer(ChordRenderer):
       if annotation.annotation_type == CHORD_SYMBOL:
         if prev_figure != NO_CHORD:
           # Render the previous chord.
-          pitches = self._chord_symbol_functions.chord_symbol_pitches(
-              prev_figure)
-          bass_pitch = self._chord_symbol_functions.chord_symbol_bass(
-              prev_figure)
+          pitches = chord_symbols_lib.chord_symbol_pitches(prev_figure)
+          bass_pitch = chord_symbols_lib.chord_symbol_bass(prev_figure)
           self._render_notes(sequence=sequence,
                              pitches=pitches,
                              bass_pitch=bass_pitch,
@@ -417,8 +479,8 @@ class BasicChordRenderer(ChordRenderer):
     if (prev_time < sequence.total_time and
         prev_figure != NO_CHORD):
       # Render the last chord.
-      pitches = self._chord_symbol_functions.chord_symbol_pitches(prev_figure)
-      bass_pitch = self._chord_symbol_functions.chord_symbol_bass(prev_figure)
+      pitches = chord_symbols_lib.chord_symbol_pitches(prev_figure)
+      bass_pitch = chord_symbols_lib.chord_symbol_bass(prev_figure)
       self._render_notes(sequence=sequence,
                          pitches=pitches,
                          bass_pitch=bass_pitch,

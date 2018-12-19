@@ -15,8 +15,6 @@
 
 from functools import partial
 
-# internal imports
-
 from magenta.models.melody_rnn import melody_rnn_model
 import magenta.music as mm
 
@@ -39,7 +37,8 @@ class MelodyRnnSequenceGenerator(mm.BaseSequenceGenerator):
           and metagraph. Mutually exclusive with `checkpoint`.
     """
     super(MelodyRnnSequenceGenerator, self).__init__(
-        model, details, steps_per_quarter, checkpoint, bundle)
+        model, details, checkpoint, bundle)
+    self.steps_per_quarter = steps_per_quarter
 
   def _generate(self, input_sequence, generator_options):
     if len(generator_options.input_sections) > 1:
@@ -54,13 +53,16 @@ class MelodyRnnSequenceGenerator(mm.BaseSequenceGenerator):
     qpm = (input_sequence.tempos[0].qpm
            if input_sequence and input_sequence.tempos
            else mm.DEFAULT_QUARTERS_PER_MINUTE)
+    steps_per_second = mm.steps_per_quarter_to_steps_per_second(
+        self.steps_per_quarter, qpm)
 
     generate_section = generator_options.generate_sections[0]
     if generator_options.input_sections:
       input_section = generator_options.input_sections[0]
       primer_sequence = mm.trim_note_sequence(
           input_sequence, input_section.start_time, input_section.end_time)
-      input_start_step = self.seconds_to_steps(input_section.start_time, qpm)
+      input_start_step = mm.quantize_to_step(
+          input_section.start_time, steps_per_second, quantize_cutoff=0)
     else:
       primer_sequence = input_sequence
       input_start_step = 0
@@ -84,9 +86,13 @@ class MelodyRnnSequenceGenerator(mm.BaseSequenceGenerator):
         ignore_polyphonic_notes=True)
     assert len(extracted_melodies) <= 1
 
-    start_step = self.seconds_to_steps(
-        generate_section.start_time, qpm)
-    end_step = self.seconds_to_steps(generate_section.end_time, qpm)
+    start_step = mm.quantize_to_step(
+        generate_section.start_time, steps_per_second, quantize_cutoff=0)
+    # Note that when quantizing end_step, we set quantize_cutoff to 1.0 so it
+    # always rounds down. This avoids generating a sequence that ends at 5.0
+    # seconds when the requested end time is 4.99.
+    end_step = mm.quantize_to_step(
+        generate_section.end_time, steps_per_second, quantize_cutoff=1.0)
 
     if extracted_melodies and extracted_melodies[0]:
       melody = extracted_melodies[0]
@@ -94,7 +100,12 @@ class MelodyRnnSequenceGenerator(mm.BaseSequenceGenerator):
       # If no melody could be extracted, create an empty melody that starts 1
       # step before the request start_step. This will result in 1 step of
       # silence when the melody is extended below.
-      melody = mm.Melody([], start_step=max(0, start_step - 1))
+      steps_per_bar = int(
+          mm.steps_per_bar_in_quantized_sequence(quantized_sequence))
+      melody = mm.Melody([],
+                         start_step=max(0, start_step - 1),
+                         steps_per_bar=steps_per_bar,
+                         steps_per_quarter=self.steps_per_quarter)
 
     # Ensure that the melody extends up to the step we want to start generating.
     melody.set_length(start_step - melody.start_step)

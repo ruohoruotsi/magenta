@@ -68,8 +68,9 @@ To start using the model, first set up your [Magenta
 environment](/README.md).
 you can either use a pre-trained model or train your own.
 
-To train the model you can use the provided jupyter notebook
-([rl_tuner.ipynb][ipynb]), or, you can simply run:
+To train the model you can use the jupyter notebook
+[RL_Tuner.ipynb](https://github.com/tensorflow/magenta-demos/blob/master/jupyter-notebooks/RL_Tuner.ipynb) found
+in our [Magenta Demos](https://github.com/tensorflow/magenta-demos) repository or you can simply run:
 
 ```
 rl_tuner_train
@@ -103,7 +104,7 @@ for musical aesthetics, try modifying the `reward_music_theory` function!
 *   The DQN code was originally based on [this example][dqn ex].
 
 [our arxiv]: https://arxiv.org/pdf/1611.02796v2.pdf
-[blog post]: https://notfuchsia.github.io/2016/10/24/natasha/
+[blog post]: https://magenta.tensorflow.org/2016/11/09/tuning-recurrent-networks-with-reinforcement-learning/
 [ipynb]: https://nbviewer.jupyter.org/github/tensorflow/magenta/tree/master/magenta/models/rl_tuner/rl_tuner.ipynb
 [note rnn ckpt]: http://download.magenta.tensorflow.org/models/rl_tuner_note_rnn.ckpt
 [magenta pretrained]: https://github.com/tensorflow/magenta/tree/master/magenta/models/melody_rnn#pre-trained

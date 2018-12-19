@@ -13,9 +13,13 @@
 # limitations under the License.
 """Tests to ensure correct reading and writing of NoteSequence record files."""
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import tempfile
 
-# internal imports
+from six.moves import range  # pylint: disable=redefined-builtin
 import tensorflow as tf
 
 from magenta.music import note_sequence_io
@@ -27,20 +31,20 @@ class NoteSequenceIoTest(tf.test.TestCase):
   def testGenerateId(self):
     sequence_id_1 = note_sequence_io.generate_note_sequence_id(
         '/my/file/name', 'my_collection', 'midi')
-    self.assertEquals('/id/midi/my_collection/', sequence_id_1[0:23])
+    self.assertEqual('/id/midi/my_collection/', sequence_id_1[0:23])
     sequence_id_2 = note_sequence_io.generate_note_sequence_id(
         '/my/file/name', 'your_collection', 'abc')
-    self.assertEquals('/id/abc/your_collection/', sequence_id_2[0:24])
-    self.assertEquals(sequence_id_1[23:], sequence_id_2[24:])
+    self.assertEqual('/id/abc/your_collection/', sequence_id_2[0:24])
+    self.assertEqual(sequence_id_1[23:], sequence_id_2[24:])
 
     sequence_id_3 = note_sequence_io.generate_note_sequence_id(
         '/your/file/name', 'my_collection', 'abc')
-    self.assertNotEquals(sequence_id_3[22:], sequence_id_1[23:])
-    self.assertNotEquals(sequence_id_3[22:], sequence_id_2[24:])
+    self.assertNotEqual(sequence_id_3[22:], sequence_id_1[23:])
+    self.assertNotEqual(sequence_id_3[22:], sequence_id_2[24:])
 
   def testNoteSequenceRecordWriterAndIterator(self):
     sequences = []
-    for i in xrange(4):
+    for i in range(4):
       sequence = music_pb2.NoteSequence()
       sequence.id = str(i)
       sequence.notes.add().pitch = i
@@ -53,7 +57,7 @@ class NoteSequenceIoTest(tf.test.TestCase):
 
       for i, sequence in enumerate(
           note_sequence_io.note_sequence_record_iterator(temp_file.name)):
-        self.assertEquals(sequence, sequences[i])
+        self.assertEqual(sequence, sequences[i])
 
 if __name__ == '__main__':
   tf.test.main()

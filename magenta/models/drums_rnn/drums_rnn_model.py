@@ -13,7 +13,7 @@
 # limitations under the License.
 """Drums RNN model."""
 
-# internal imports
+import tensorflow as tf
 
 import magenta
 from magenta.models.shared import events_rnn_model
@@ -68,17 +68,14 @@ default_configs = {
         magenta.music.OneHotEventSequenceEncoderDecoder(
             magenta.music.MultiDrumOneHotEncoding([
                 [39] +  # use hand clap as default when decoding
-                range(mm.MIN_MIDI_PITCH, 39) +
-                range(39, mm.MAX_MIDI_PITCH + 1)])),
-        magenta.common.HParams(
+                list(range(mm.MIN_MIDI_PITCH, 39)) +
+                list(range(39, mm.MAX_MIDI_PITCH + 1))])),
+        tf.contrib.training.HParams(
             batch_size=128,
             rnn_layer_sizes=[128, 128],
             dropout_keep_prob=0.5,
-            skip_first_n_losses=0,
             clip_norm=5,
-            initial_learning_rate=0.001,
-            decay_steps=1000,
-            decay_rate=0.95),
+            learning_rate=0.001),
         steps_per_quarter=2),
 
     'drum_kit': events_rnn_model.EventSequenceRnnConfig(
@@ -89,14 +86,11 @@ default_configs = {
             magenta.music.MultiDrumOneHotEncoding(),
             lookback_distances=[],
             binary_counter_bits=6),
-        magenta.common.HParams(
+        tf.contrib.training.HParams(
             batch_size=128,
             rnn_layer_sizes=[256, 256, 256],
             dropout_keep_prob=0.5,
-            skip_first_n_losses=0,
             attn_length=32,
             clip_norm=3,
-            initial_learning_rate=0.001,
-            decay_steps=1000,
-            decay_rate=0.95))
+            learning_rate=0.001))
 }

@@ -13,7 +13,6 @@
 # limitations under the License.
 """Tests for drums_lib."""
 
-# internal imports
 import tensorflow as tf
 
 from magenta.common import testing_lib as common_testing_lib
@@ -149,28 +148,28 @@ class DrumsLibTest(tf.test.TestCase):
     drums.set_length(5)
     self.assertListEqual([DRUMS(60), NO_DRUMS, NO_DRUMS, NO_DRUMS, NO_DRUMS],
                          list(drums))
-    self.assertEquals(9, drums.start_step)
-    self.assertEquals(14, drums.end_step)
+    self.assertEqual(9, drums.start_step)
+    self.assertEqual(14, drums.end_step)
 
     drums = drums_lib.DrumTrack(events, start_step=9)
     drums.set_length(5, from_left=True)
     self.assertListEqual([NO_DRUMS, NO_DRUMS, NO_DRUMS, NO_DRUMS, DRUMS(60)],
                          list(drums))
-    self.assertEquals(5, drums.start_step)
-    self.assertEquals(10, drums.end_step)
+    self.assertEqual(5, drums.start_step)
+    self.assertEqual(10, drums.end_step)
 
     events = [DRUMS(60), NO_DRUMS, NO_DRUMS, NO_DRUMS]
     drums = drums_lib.DrumTrack(events)
     drums.set_length(3)
     self.assertListEqual([DRUMS(60), NO_DRUMS, NO_DRUMS], list(drums))
-    self.assertEquals(0, drums.start_step)
-    self.assertEquals(3, drums.end_step)
+    self.assertEqual(0, drums.start_step)
+    self.assertEqual(3, drums.end_step)
 
     drums = drums_lib.DrumTrack(events)
     drums.set_length(3, from_left=True)
     self.assertListEqual([NO_DRUMS, NO_DRUMS, NO_DRUMS], list(drums))
-    self.assertEquals(1, drums.start_step)
-    self.assertEquals(4, drums.end_step)
+    self.assertEqual(1, drums.start_step)
+    self.assertEqual(4, drums.end_step)
 
   def testToSequenceSimple(self):
     drums = drums_lib.DrumTrack(
@@ -277,7 +276,7 @@ class DrumsLibTest(tf.test.TestCase):
   def testExtractDrumTracksTooShort(self):
     testing_lib.add_track_to_sequence(
         self.note_sequence, 0,
-        [(12, 127, 2, 4), (14, 50, 6, 7)],
+        [(12, 127, 3, 4), (14, 50, 6, 7)],
         is_drum=True)
     quantized_sequence = sequences_lib.quantize_note_sequence(
         self.note_sequence, steps_per_quarter=1)
@@ -285,6 +284,21 @@ class DrumsLibTest(tf.test.TestCase):
         quantized_sequence, min_bars=2, gap_bars=1)
     drum_tracks = [list(drums) for drums in drum_tracks]
     self.assertEqual([], drum_tracks)
+
+    del self.note_sequence.notes[:]
+    testing_lib.add_track_to_sequence(
+        self.note_sequence, 0,
+        [(12, 127, 3, 4), (14, 50, 7, 8)],
+        is_drum=True)
+    quantized_sequence = sequences_lib.quantize_note_sequence(
+        self.note_sequence, steps_per_quarter=1)
+    drum_tracks, _ = drums_lib.extract_drum_tracks(
+        quantized_sequence, min_bars=2, gap_bars=1)
+    drum_tracks = [list(drums) for drums in drum_tracks]
+    self.assertEqual(
+        [[NO_DRUMS, NO_DRUMS, NO_DRUMS, DRUMS(12), NO_DRUMS, NO_DRUMS, NO_DRUMS,
+          DRUMS(14)]],
+        drum_tracks)
 
   def testExtractDrumTracksPadEnd(self):
     testing_lib.add_track_to_sequence(

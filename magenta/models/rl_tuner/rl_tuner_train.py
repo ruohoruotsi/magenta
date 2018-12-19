@@ -15,26 +15,23 @@
 r"""Code to train a MelodyQ model.
 
 To run this code on your local machine:
-$ bazel run magenta/models/rl_tuner:rl_tuner_train -- \
+python magenta/models/rl_tuner/rl_tuner_train.py \
 --note_rnn_checkpoint_dir 'path' --midi_primer 'primer.mid' \
 --training_data_path 'path.tfrecord'
 """
 import os
 
-# internal imports
-
 import matplotlib
 # Need to use 'Agg' option for plotting and saving files from command line.
 # Can't use 'Agg' in RL Tuner because it breaks plotting in notebooks.
-# pylint: disable=g-import-not-at-top
+# pylint: disable=g-import-not-at-top,wrong-import-position
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # pylint: disable=unused-import
 import tensorflow as tf
 
-from magenta.common import tf_lib
 from magenta.models.rl_tuner import rl_tuner
 from magenta.models.rl_tuner import rl_tuner_ops
-# pylint: enable=g-import-not-at-top
+# pylint: enable=g-import-not-at-top,wrong-import-position
 
 
 FLAGS = tf.app.flags.FLAGS
@@ -87,13 +84,13 @@ def main(_):
              if FLAGS.note_rnn_type == 'basic_rnn'
              else rl_tuner_ops.default_hparams())
 
-  dqn_hparams = tf_lib.HParams(random_action_probability=0.1,
-                               store_every_nth=1,
-                               train_every_nth=5,
-                               minibatch_size=32,
-                               discount_rate=0.5,
-                               max_experience=100000,
-                               target_network_update_rate=0.01)
+  dqn_hparams = tf.contrib.training.HParams(random_action_probability=0.1,
+                                            store_every_nth=1,
+                                            train_every_nth=5,
+                                            minibatch_size=32,
+                                            discount_rate=0.5,
+                                            max_experience=100000,
+                                            target_network_update_rate=0.01)
 
   output_dir = os.path.join(FLAGS.output_dir, FLAGS.algorithm)
   output_ckpt = FLAGS.algorithm + '.ckpt'

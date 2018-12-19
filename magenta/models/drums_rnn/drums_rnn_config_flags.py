@@ -13,7 +13,6 @@
 # limitations under the License.
 """Provides a class, defaults, and utils for Drums RNN model configuration."""
 
-# internal imports
 import tensorflow as tf
 
 from magenta.models.drums_rnn import drums_rnn_model
@@ -32,10 +31,10 @@ tf.app.flags.DEFINE_string(
     None,
     'A description of the generator, overriding the default.')
 tf.app.flags.DEFINE_string(
-    'hparams', '{}',
-    'String representation of a Python dictionary containing hyperparameter '
-    'to value mapping. This mapping is merged with the default '
-    'hyperparameters.')
+    'hparams', '',
+    'Comma-separated list of `name=value` pairs. For each pair, the value of '
+    'the hyperparameter named `name` is set to `value`. This mapping is merged '
+    'with the default hyperparameters.')
 
 
 class DrumsRnnConfigFlagsException(Exception):

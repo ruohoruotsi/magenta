@@ -13,11 +13,15 @@
 # limitations under the License.
 """For running data processing pipelines."""
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import abc
 import inspect
 import os.path
 
-# internal imports
+import six
 import tensorflow as tf
 
 from magenta.pipelines import statistics
@@ -69,7 +73,7 @@ class PipelineKey(object):
 
 def _guarantee_dict(given, default_name):
   if not isinstance(given, dict):
-    return {default_name: dict}
+    return {default_name: list}
   return given
 
 
@@ -91,7 +95,7 @@ def _assert_valid_type_signature(type_sig, type_sig_name):
   """
   if isinstance(type_sig, dict):
     for k, val in type_sig.items():
-      if not isinstance(k, basestring):
+      if not isinstance(k, six.string_types):
         raise InvalidTypeSignatureException(
             '%s key %s must be a string.' % (type_sig_name, k))
       if not inspect.isclass(val):
@@ -155,7 +159,7 @@ class Pipeline(object):
       # This will get the name of the subclass, not "Pipeline".
       self._name = type(self).__name__
     else:
-      assert isinstance(name, basestring)
+      assert isinstance(name, six.string_types)
       self._name = name
     _assert_valid_type_signature(input_type, 'input_type')
     _assert_valid_type_signature(output_type, 'output_type')
@@ -313,7 +317,7 @@ def run_pipeline_serial(pipeline,
                         output_file_base=None):
   """Runs the a pipeline on a data source and writes to a directory.
 
-  Run the the pipeline on each input from the iterator one at a time.
+  Run the pipeline on each input from the iterator one at a time.
   A file will be written to `output_dir` for each dataset name specified
   by the pipeline. pipeline.transform is called on each input and the
   results are aggregated into their correct datasets.
@@ -361,8 +365,8 @@ def run_pipeline_serial(pipeline,
                                  '%s_%s.tfrecord' % (output_file_base, name))
                     for name in output_names]
 
-  writers = dict([(name, tf.python_io.TFRecordWriter(path))
-                  for name, path in zip(output_names, output_paths)])
+  writers = dict((name, tf.python_io.TFRecordWriter(path))
+                 for name, path in zip(output_names, output_paths))
 
   total_inputs = 0
   total_outputs = 0
@@ -370,8 +374,8 @@ def run_pipeline_serial(pipeline,
   for input_ in input_iterator:
     total_inputs += 1
     for name, outputs in _guarantee_dict(pipeline.transform(input_),
-                                         output_names[0]).items():
-      for output in outputs:
+                                         list(output_names)[0]).items():
+      for output in outputs:  # pylint:disable=not-an-iterable
         writers[name].write(output.SerializeToString())
       total_outputs += len(outputs)
     stats = statistics.merge_statistics(stats + pipeline.get_stats())
@@ -401,15 +405,14 @@ def load_pipeline(pipeline, input_iterator):
     dictionary mapping dataset names to lists of objects. Each name acts
     as a bucket where outputs are aggregated.
   """
-  aggregated_outputs = dict(
-      [(name, []) for name in pipeline.output_type_as_dict])
+  aggregated_outputs = dict((name, []) for name in pipeline.output_type_as_dict)
   total_inputs = 0
   total_outputs = 0
   stats = []
   for input_object in input_iterator:
     total_inputs += 1
     outputs = _guarantee_dict(pipeline.transform(input_object),
-                              aggregated_outputs.keys()[0])
+                              list(aggregated_outputs.keys())[0])
     for name, output_list in outputs.items():
       aggregated_outputs[name].extend(output_list)
       total_outputs += len(output_list)

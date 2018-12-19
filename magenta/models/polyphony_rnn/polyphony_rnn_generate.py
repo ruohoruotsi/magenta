@@ -20,8 +20,6 @@ import ast
 import os
 import time
 
-# internal imports
-
 import tensorflow as tf
 import magenta
 
@@ -108,6 +106,11 @@ tf.app.flags.DEFINE_string(
     'log', 'INFO',
     'The threshold for what messages will be logged DEBUG, INFO, WARN, ERROR, '
     'or FATAL.')
+tf.app.flags.DEFINE_string(
+    'hparams', '',
+    'Comma-separated list of `name=value` pairs. For each pair, the value of '
+    'the hyperparameter named `name` is set to `value`. This mapping is merged '
+    'with the default hyperparameters.')
 
 
 def get_checkpoint():
@@ -238,14 +241,21 @@ def main(unused_argv):
   """Saves bundle or runs generator based on flags."""
   tf.logging.set_verbosity(FLAGS.log)
 
-  config = polyphony_model.default_configs[FLAGS.config]
+  bundle = get_bundle()
+
+  config_id = bundle.generator_details.id if bundle else FLAGS.config
+  config = polyphony_model.default_configs[config_id]
+  config.hparams.parse(FLAGS.hparams)
+  # Having too large of a batch size will slow generation down unnecessarily.
+  config.hparams.batch_size = min(
+      config.hparams.batch_size, FLAGS.beam_size * FLAGS.branch_factor)
 
   generator = polyphony_sequence_generator.PolyphonyRnnSequenceGenerator(
       model=polyphony_model.PolyphonyRnnModel(config),
       details=config.details,
       steps_per_quarter=config.steps_per_quarter,
       checkpoint=get_checkpoint(),
-      bundle=get_bundle())
+      bundle=bundle)
 
   if FLAGS.save_generator_bundle:
     bundle_filename = os.path.expanduser(FLAGS.bundle_file)

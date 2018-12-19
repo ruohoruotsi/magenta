@@ -13,11 +13,14 @@
 # limitations under the License.
 """Defines statistics objects for pipelines."""
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import abc
 import bisect
 import copy
 
-# internal imports
 import tensorflow as tf
 
 
@@ -122,7 +125,7 @@ def merge_statistics(stats_list):
       name_map[stat.name].merge_from(stat)
     else:
       name_map[stat.name] = stat
-  return name_map.values()
+  return list(name_map.values())
 
 
 def log_statistics_list(stats_list, logger_fn=tf.logging.info):
@@ -215,8 +218,7 @@ class Histogram(Statistic):
 
     # List of inclusive lowest values in each bucket.
     self.buckets = [float('-inf')] + sorted(set(buckets))
-    self.counters = dict([(bucket_lower, 0)
-                          for bucket_lower in self.buckets])
+    self.counters = dict((bucket_lower, 0) for bucket_lower in self.buckets)
     self.verbose_pretty_print = verbose_pretty_print
 
   # https://docs.python.org/2/library/bisect.html#searching-sorted-lists

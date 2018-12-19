@@ -20,14 +20,15 @@ into tensorflow.magenta.NoteSequence.
 # Imports
 # Python 2 uses integer division for integers. Using this gives the Python 3
 # behavior of producing a float when dividing integers
+from __future__ import absolute_import
 from __future__ import division
+from __future__ import print_function
 
 from fractions import Fraction
 import xml.etree.ElementTree as ET
-from zipfile import ZipFile
+import zipfile
 
-# internal imports
-
+import six
 from magenta.music import constants
 
 DEFAULT_MIDI_PROGRAM = 0    # Default MIDI Program (0 = grand piano)
@@ -60,6 +61,32 @@ class MultipleTimeSignatureException(MusicXMLParseException):
 
 class AlternatingTimeSignatureException(MusicXMLParseException):
   """Exception thrown when an alternating time signature is encountered."""
+  pass
+
+
+class TimeSignatureParseException(MusicXMLParseException):
+  """Exception thrown when the time signature could not be parsed."""
+  pass
+
+
+class UnpitchedNoteException(MusicXMLParseException):
+  """Exception thrown when an unpitched note is encountered.
+
+  We do not currently support parsing files with unpitched notes (e.g.,
+  percussion scores).
+
+  http://www.musicxml.com/tutorial/percussion/unpitched-notes/
+  """
+  pass
+
+
+class KeyParseException(MusicXMLParseException):
+  """Exception thrown when a key signature cannot be parsed."""
+  pass
+
+
+class InvalidNoteDurationTypeException(MusicXMLParseException):
+  """Exception thrown when a note's duration type is invalid."""
   pass
 
 
@@ -143,11 +170,17 @@ class MusicXMLDocument(object):
 
     Returns:
       The score as an xml.etree.ElementTree.
+
+    Raises:
+      MusicXMLParseException: if the file cannot be parsed.
     """
     score = None
     if filename.endswith('.mxl'):
       # Compressed MXL file. Uncompress in memory.
-      filename = ZipFile(filename)
+      try:
+        mxlzip = zipfile.ZipFile(filename)
+      except zipfile.BadZipfile as exception:
+        raise MusicXMLParseException(exception)
 
       # A compressed MXL file may contain multiple files, but only one
       # MusicXML file. Read the META-INF/container.xml file inside of the
@@ -155,32 +188,65 @@ class MusicXMLDocument(object):
       # http://www.musicxml.com/tutorial/compressed-mxl-files/zip-archive-structure/
 
       # Raise a MusicXMLParseException if multiple MusicXML files found
-      namelist = filename.namelist()
-      container_file = [x for x in namelist if x == 'META-INF/container.xml']
+
+      infolist = mxlzip.infolist()
+      if six.PY3:
+        # In py3, instead of returning raw bytes, ZipFile.infolist() tries to
+        # guess the filenames' encoding based on file headers, and decodes using
+        # this encoding in order to return a list of strings. If the utf-8
+        # header is missing, it decodes using the DOS code page 437 encoding
+        # which is almost definitely wrong. Here we need to explicitly check
+        # for when this has occurred and change the encoding to utf-8.
+        # https://stackoverflow.com/questions/37723505/namelist-from-zipfile-returns-strings-with-an-invalid-encoding
+        zip_filename_utf8_flag = 0x800
+        for info in infolist:
+          if info.flag_bits & zip_filename_utf8_flag == 0:
+            filename_bytes = info.filename.encode('437')
+            filename = filename_bytes.decode('utf-8', 'replace')
+            info.filename = filename
+
+      container_file = [x for x in infolist
+                        if x.filename == 'META-INF/container.xml']
       compressed_file_name = ''
 
-      try:
-        container = ET.fromstring(filename.read(container_file[0]))
-        for rootfile_tag in container.findall('./rootfiles/rootfile'):
-          if 'media-type' in rootfile_tag.attrib:
-            if rootfile_tag.attrib['media-type'] == MUSICXML_MIME_TYPE:
+      if container_file:
+        try:
+          container = ET.fromstring(mxlzip.read(container_file[0]))
+          for rootfile_tag in container.findall('./rootfiles/rootfile'):
+            if 'media-type' in rootfile_tag.attrib:
+              if rootfile_tag.attrib['media-type'] == MUSICXML_MIME_TYPE:
+                if not compressed_file_name:
+                  compressed_file_name = rootfile_tag.attrib['full-path']
+                else:
+                  raise MusicXMLParseException(
+                      'Multiple MusicXML files found in compressed archive')
+            else:
+              # No media-type attribute, so assume this is the MusicXML file
               if not compressed_file_name:
                 compressed_file_name = rootfile_tag.attrib['full-path']
               else:
                 raise MusicXMLParseException(
                     'Multiple MusicXML files found in compressed archive')
-          else:
-            # No media-type attribute, so assume this is the MusicXML file
-            if not compressed_file_name:
-              compressed_file_name = rootfile_tag.attrib['full-path']
-            else:
-              raise MusicXMLParseException(
-                  'Multiple MusicXML files found in compressed archive')
-      except ET.ParseError as exception:
-        raise MusicXMLParseException(exception)
+        except ET.ParseError as exception:
+          raise MusicXMLParseException(exception)
 
+      if not compressed_file_name:
+        raise MusicXMLParseException(
+            'Unable to locate main .xml file in compressed archive.')
+      if six.PY2:
+        # In py2, the filenames in infolist are utf-8 encoded, so
+        # we encode the compressed_file_name as well in order to
+        # be able to lookup compressed_file_info below.
+        compressed_file_name = compressed_file_name.encode('utf-8')
       try:
-        score = ET.fromstring(filename.read(compressed_file_name))
+        compressed_file_info = [x for x in infolist
+                                if x.filename == compressed_file_name][0]
+      except IndexError:
+        raise MusicXMLParseException(
+            'Score file %s not found in zip archive' % compressed_file_name)
+      score_string = mxlzip.read(compressed_file_info)
+      try:
+        score = ET.fromstring(score_string)
       except ET.ParseError as exception:
         raise MusicXMLParseException(exception)
     else:
@@ -386,9 +452,44 @@ class Part(object):
     self._state.transpose = 0
 
     xml_measures = xml_part.findall('measure')
-    for child in xml_measures:
-      measure = Measure(child, self._state)
-      self.measures.append(measure)
+    for measure in xml_measures:
+      # Issue #674: Repair measures that do not contain notes
+      # by inserting a whole measure rest
+      self._repair_empty_measure(measure)
+      parsed_measure = Measure(measure, self._state)
+      self.measures.append(parsed_measure)
+
+  def _repair_empty_measure(self, measure):
+    """Repair a measure if it is empty by inserting a whole measure rest.
+
+    If a <measure> only consists of a <forward> element that advances
+    the time cursor, remove the <forward> element and replace
+    with a whole measure rest of the same duration.
+
+    Args:
+      measure: The measure to repair.
+    """
+    # Issue #674 - If the <forward> element is in a measure without
+    # any <note> elements, treat it as if it were a whole measure
+    # rest by inserting a rest of that duration
+    forward_count = len(measure.findall('forward'))
+    note_count = len(measure.findall('note'))
+    if note_count == 0 and forward_count == 1:
+      # Get the duration of the <forward> element
+      xml_forward = measure.find('forward')
+      xml_duration = xml_forward.find('duration')
+      forward_duration = int(xml_duration.text)
+
+      # Delete the <forward> element
+      measure.remove(xml_forward)
+
+      # Insert the new note
+      new_note = '<note>'
+      new_note += '<rest /><duration>' + str(forward_duration) + '</duration>'
+      new_note += '<voice>1</voice><type>whole</type><staff>1</staff>'
+      new_note += '</note>'
+      new_note_xml = ET.fromstring(new_note)
+      measure.append(new_note_xml)
 
   def __str__(self):
     part_str = 'Part: ' + self.score_part.part_name
@@ -456,13 +557,23 @@ class Measure(object):
       elif child.tag == 'time':
         if self.time_signature is None:
           self.time_signature = TimeSignature(self.state, child)
+          self.state.time_signature = self.time_signature
         else:
           raise MultipleTimeSignatureException('Multiple time signatures')
       elif child.tag == 'transpose':
         transpose = int(child.find('chromatic').text)
         self.state.transpose = transpose
         if self.key_signature is not None:
-          self.key_signature.key += transpose
+          # Transposition is chromatic. Every half step up is 5 steps backward
+          # on the circle of fifths, which has 12 positions.
+          key_transpose = (transpose * -5) % 12
+          new_key = self.key_signature.key + key_transpose
+          # If the new key has >6 sharps, translate to flats.
+          # TODO(fjord): Could be more smart about when to use sharps vs. flats
+          # when there are enharmonic equivalents.
+          if new_key > 6:
+            new_key %= -6
+          self.key_signature.key = new_key
       else:
         # Ignore other tag types because they are not relevant to Magenta.
         pass
@@ -522,43 +633,58 @@ class Measure(object):
     """
     # Compute the fractional time signature (duration / divisions)
     # Multiply divisions by 4 because division is always parts per quarter note
-    fractional_time_signature = Fraction(self.duration,
-                                         self.state.divisions * 4)
+    numerator = self.duration
+    denominator = self.state.divisions * 4
+    fractional_time_signature = Fraction(numerator, denominator)
 
     if self.state.time_signature is None and self.time_signature is None:
-      # No global time signature yet and no time signature defined
+      # No global time signature yet and no measure time signature defined
       # in this measure (no time signature or senza misura).
       # Insert the fractional time signature as the time signature
       # for this measure
-
       self.time_signature = TimeSignature(self.state)
       self.time_signature.numerator = fractional_time_signature.numerator
       self.time_signature.denominator = fractional_time_signature.denominator
       self.state.time_signature = self.time_signature
     else:
-      # If no global time signature yet, set it to the
-      # time signature in this measure
-      if self.state.time_signature is None:
-        self.state.time_signature = self.time_signature
+      fractional_state_time_signature = Fraction(
+          self.state.time_signature.numerator,
+          self.state.time_signature.denominator)
+
+      # Check for pickup measure. Reset time signature to smaller numerator
+      pickup_measure = False
+      if numerator < self.state.time_signature.numerator:
+        pickup_measure = True
 
       # Get the current time signature denominator
       global_time_signature_denominator = self.state.time_signature.denominator
 
       # If the fractional time signature = 1 (e.g. 4/4),
       # make the numerator the same as the global denominator
-      if fractional_time_signature == 1:
+      if fractional_time_signature == 1 and not pickup_measure:
         new_time_signature = TimeSignature(self.state)
         new_time_signature.numerator = global_time_signature_denominator
         new_time_signature.denominator = global_time_signature_denominator
       else:
         # Otherwise, set the time signature to the fractional time signature
+        # Issue #674 - Use the original numerator and denominator
+        # instead of the fractional one
         new_time_signature = TimeSignature(self.state)
-        new_time_signature.numerator = fractional_time_signature.numerator
-        new_time_signature.denominator = fractional_time_signature.denominator
+        new_time_signature.numerator = numerator
+        new_time_signature.denominator = denominator
+
+        new_time_sig_fraction = Fraction(numerator,
+                                         denominator)
+
+        if new_time_sig_fraction == fractional_time_signature:
+          new_time_signature.numerator = fractional_time_signature.numerator
+          new_time_signature.denominator = fractional_time_signature.denominator
 
       # Insert a new time signature only if it does not equal the global
       # time signature.
-      if new_time_signature != self.state.time_signature:
+      if (pickup_measure or
+          (self.time_signature is None
+           and (fractional_time_signature != fractional_state_time_signature))):
         new_time_signature.time_position = self.start_time_position
         self.time_signature = new_time_signature
         self.state.time_signature = new_time_signature
@@ -604,6 +730,8 @@ class Note(object):
       elif child.tag == 'time-modification':
         # A time-modification element represents a tuplet_ratio
         self._parse_tuplet(child)
+      elif child.tag == 'unpitched':
+        raise UnpitchedNoteException('Unpitched notes are not supported')
       else:
         # Ignore other tag types because they are not relevant to Magenta.
         pass
@@ -719,7 +847,7 @@ class NoteDuration(object):
     self.seconds = 0                    # Duration in seconds
     self.time_position = 0              # Onset time in seconds
     self.dots = 0                       # Number of augmentation dots
-    self.type = 'quarter'               # MusicXML duration type
+    self._type = 'quarter'              # MusicXML duration type
     self.tuplet_ratio = Fraction(1, 1)  # Ratio for tuplets (default to 1)
     self.is_grace_note = True           # Assume true until not found
     self.state = state
@@ -808,6 +936,17 @@ class NoteDuration(object):
     """Return the duration ratio as a float."""
     ratio = self.duration_ratio()
     return ratio.numerator / ratio.denominator
+
+  @property
+  def type(self):
+    return self._type
+
+  @type.setter
+  def type(self, new_type):
+    if new_type not in self.TYPE_RATIO_MAP:
+      raise InvalidNoteDurationTypeException(
+          'Note duration type "{}" is not valid'.format(new_type))
+    self._type = new_type
 
 
 class ChordSymbol(object):
@@ -1002,10 +1141,12 @@ class ChordSymbol(object):
     return step + alter_string
 
   def _parse_root(self, xml_root):
+    """Parse the <root> tag for a chord symbol."""
     self.root = self._parse_pitch(xml_root, step_tag='root-step',
                                   alter_tag='root-alter')
 
   def _parse_bass(self, xml_bass):
+    """Parse the <bass> tag for a chord symbol."""
     self.bass = self._parse_pitch(xml_bass, step_tag='bass-step',
                                   alter_tag='bass-alter')
 
@@ -1014,6 +1155,8 @@ class ChordSymbol(object):
     if xml_degree.find('degree-value') is None:
       raise ChordSymbolParseException('Missing scale degree value in harmony')
     value_text = xml_degree.find('degree-value').text
+    if value_text is None:
+      raise ChordSymbolParseException('Missing scale degree')
     try:
       value = int(value_text)
     except ValueError:
@@ -1103,8 +1246,14 @@ class TimeSignature(object):
       # not supported (ex: alternating meter)
       raise AlternatingTimeSignatureException('Alternating Time Signature')
 
-    self.numerator = int(self.xml_time.find('beats').text)
-    self.denominator = int(self.xml_time.find('beat-type').text)
+    beats = self.xml_time.find('beats').text
+    beat_type = self.xml_time.find('beat-type').text
+    try:
+      self.numerator = int(beats)
+      self.denominator = int(beat_type)
+    except ValueError:
+      raise TimeSignatureParseException(
+          'Could not parse time signature: {}/{}'.format(beats, beat_type))
     self.time_position = self.state.time_position
 
   def __str__(self):
@@ -1142,7 +1291,15 @@ class KeySignature(object):
 
     If the mode is not minor (e.g. dorian), default to "major"
     because MIDI only supports major and minor modes.
+
+
+    Raises:
+      KeyParseException: If the fifths element is missing.
     """
+    fifths = self.xml_key.find('fifths')
+    if fifths is None:
+      raise KeyParseException(
+          'Could not find fifths attribute in key signature.')
     self.key = int(self.xml_key.find('fifths').text)
     mode = self.xml_key.find('mode')
     # Anything not minor will be interpreted as major

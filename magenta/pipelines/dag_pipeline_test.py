@@ -13,10 +13,12 @@
 # limitations under the License.
 """Tests for dag_pipeline."""
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import collections
 
-# internal imports
 import tensorflow as tf
 
 from magenta.pipelines import dag_pipeline
@@ -124,7 +126,7 @@ class DAGPipelineTest(tf.test.TestCase):
       x, y, z = input_object.x, input_object.y, input_object.z
       output_dict = dag_pipe_obj.transform(input_object)
 
-      self.assertEqual(output_dict.keys(), ['abcdz'])
+      self.assertEqual(list(output_dict.keys()), ['abcdz'])
       results = output_dict['abcdz']
       self.assertEqual(len(results), 1)
       result = results[0]
@@ -164,7 +166,7 @@ class DAGPipelineTest(tf.test.TestCase):
     x, y, z = 1, 2, 3
     output_dict = dag_pipe_obj.transform(Type0(x, y, z))
 
-    self.assertEqual(output_dict.keys(), ['outputs'])
+    self.assertEqual(list(output_dict.keys()), ['outputs'])
     results = output_dict['outputs']
     self.assertEqual(len(results), 3)
 
@@ -367,7 +369,7 @@ class DAGPipelineTest(tf.test.TestCase):
       def __init__(self):
         pipeline.Pipeline.__init__(self, Type0, Type1)
 
-      def transform(self, input_dict):
+      def transform(self, unused_input_dict):
         return []
 
     q, r, s = UnitQ(), UnitR(), UnitS()

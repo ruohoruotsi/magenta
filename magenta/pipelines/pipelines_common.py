@@ -15,56 +15,10 @@
 
 import random
 
-# internal imports
 import numpy as np
-import tensorflow as tf
 
-from magenta.music import sequences_lib
 from magenta.pipelines import pipeline
 from magenta.pipelines import statistics
-from magenta.protobuf import music_pb2
-
-
-class TimeChangeSplitter(pipeline.Pipeline):
-  """A Pipeline that splits NoteSequences on time signature & tempo changes."""
-
-  def __init__(self, name=None):
-    super(TimeChangeSplitter, self).__init__(
-        input_type=music_pb2.NoteSequence,
-        output_type=music_pb2.NoteSequence,
-        name=name)
-
-  def transform(self, note_sequence):
-    return sequences_lib.split_note_sequence_on_time_changes(note_sequence)
-
-
-class Quantizer(pipeline.Pipeline):
-  """A Module that quantizes NoteSequence data."""
-
-  def __init__(self, steps_per_quarter=4, name=None):
-    super(Quantizer, self).__init__(
-        input_type=music_pb2.NoteSequence,
-        output_type=music_pb2.NoteSequence,
-        name=name)
-    self._steps_per_quarter = steps_per_quarter
-
-  def transform(self, note_sequence):
-    try:
-      quantized_sequence = sequences_lib.quantize_note_sequence(
-          note_sequence, self._steps_per_quarter)
-      return [quantized_sequence]
-    except sequences_lib.MultipleTimeSignatureException as e:
-      tf.logging.warning('Multiple time signatures in NoteSequence %s: %s',
-                         note_sequence.filename, e)
-      self._set_stats([statistics.Counter(
-          'sequences_discarded_because_multiple_time_signatures', 1)])
-      return []
-    except sequences_lib.MultipleTempoException as e:
-      tf.logging.warning('Multiple tempos found in NoteSequence %s: %s',
-                         note_sequence.filename, e)
-      self._set_stats([statistics.Counter(
-          'sequences_discarded_because_multiple_tempos', 1)])
-      return []
 
 
 class RandomPartition(pipeline.Pipeline):
@@ -79,7 +33,7 @@ class RandomPartition(pipeline.Pipeline):
 
   def __init__(self, type_, partition_names, partition_probabilities):
     super(RandomPartition, self).__init__(
-        type_, dict([(name, type_) for name in partition_names]))
+        type_, dict((name, type_) for name in partition_names))
     if len(partition_probabilities) != len(partition_names) - 1:
       raise ValueError('len(partition_probabilities) != '
                        'len(partition_names) - 1. '
@@ -98,8 +52,8 @@ class RandomPartition(pipeline.Pipeline):
           bucket = i
           break
     self._set_stats(self._make_stats(self.partition_names[bucket]))
-    return dict([(name, [] if i != bucket else [input_object])
-                 for i, name in enumerate(self.partition_names)])
+    return dict((name, [] if i != bucket else [input_object])
+                for i, name in enumerate(self.partition_names))
 
   def _make_stats(self, increment_partition=None):
     return [statistics.Counter(increment_partition + '_count', 1)]

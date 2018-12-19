@@ -15,7 +15,6 @@
 
 import os
 
-# internal imports
 import numpy as np
 import tensorflow as tf
 
@@ -32,7 +31,7 @@ class MusicNetIoTest(tf.test.TestCase):
         '../testdata/musicnet_example.npz')
 
   def testNoteIntervalTreeToSequenceProto(self):
-    example = np.load(self.musicnet_example_filename)
+    example = np.load(self.musicnet_example_filename, encoding='latin1')
     note_interval_tree = example['test'][1]
     sequence = musicnet_io.note_interval_tree_to_sequence_proto(
         note_interval_tree, 44100)
@@ -40,7 +39,7 @@ class MusicNetIoTest(tf.test.TestCase):
     self.assertEqual(72, min(note.pitch for note in sequence.notes))
     self.assertEqual(79, max(note.pitch for note in sequence.notes))
     self.assertTrue(all(note.instrument == 0 for note in sequence.notes))
-    self.assertTrue(all(note.program == 42 for note in sequence.notes))
+    self.assertTrue(all(note.program == 41 for note in sequence.notes))
     self.assertEqual(0.5, sequence.total_time)
 
   def testMusicNetIterator(self):

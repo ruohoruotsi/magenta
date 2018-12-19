@@ -13,7 +13,10 @@
 # limitations under the License.
 """Tests for encoder_decoder."""
 
-# internal imports
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import numpy as np
 import tensorflow as tf
 
@@ -26,10 +29,10 @@ class OneHotEventSequenceEncoderDecoderTest(tf.test.TestCase):
 
   def setUp(self):
     self.enc = encoder_decoder.OneHotEventSequenceEncoderDecoder(
-        testing_lib.TrivialOneHotEncoding(3))
+        testing_lib.TrivialOneHotEncoding(3, num_steps=range(3)))
 
   def testInputSize(self):
-    self.assertEquals(3, self.enc.input_size)
+    self.assertEqual(3, self.enc.input_size)
 
   def testNumClasses(self):
     self.assertEqual(3, self.enc.num_classes)
@@ -55,6 +58,10 @@ class OneHotEventSequenceEncoderDecoderTest(tf.test.TestCase):
     self.assertEqual(0, self.enc.class_index_to_event(0, events))
     self.assertEqual(1, self.enc.class_index_to_event(1, events))
     self.assertEqual(2, self.enc.class_index_to_event(2, events))
+
+  def testLabelsToNumSteps(self):
+    labels = [0, 1, 0, 2, 0]
+    self.assertEqual(3, self.enc.labels_to_num_steps(labels))
 
   def testEncode(self):
     events = [0, 1, 0, 2, 0]
@@ -103,18 +110,62 @@ class OneHotEventSequenceEncoderDecoderTest(tf.test.TestCase):
     events1 = [0, 1, 0]
     events2 = [1, 2, 2]
     event_sequences = [events1, events2]
-    softmax = [[[0.0, 0.5, 0.5], [0.3, 0.4, 0.3], [0.4, 0.6, 0.0]],
-               [[0.0, 0.6, 0.4], [0.0, 0.4, 0.6], [0.1, 0.1, 0.8]]]
+    softmax = [[[0.0, 0.5, 0.5], [0.3, 0.4, 0.3]],
+               [[0.0, 0.6, 0.4], [0.0, 0.4, 0.6]]]
     p = self.enc.evaluate_log_likelihood(event_sequences, softmax)
     self.assertListEqual([np.log(0.5) + np.log(0.3),
                           np.log(0.4) + np.log(0.6)], p)
+
+
+class OneHotIndexEventSequenceEncoderDecoderTest(tf.test.TestCase):
+
+  def setUp(self):
+    self.enc = encoder_decoder.OneHotIndexEventSequenceEncoderDecoder(
+        testing_lib.TrivialOneHotEncoding(3, num_steps=range(3)))
+
+  def testInputSize(self):
+    self.assertEqual(1, self.enc.input_size)
+
+  def testInputDepth(self):
+    self.assertEqual(3, self.enc.input_depth)
+
+  def testEventsToInput(self):
+    events = [0, 1, 0, 2, 0]
+    self.assertEqual([0], self.enc.events_to_input(events, 0))
+    self.assertEqual([1], self.enc.events_to_input(events, 1))
+    self.assertEqual([0], self.enc.events_to_input(events, 2))
+    self.assertEqual([2], self.enc.events_to_input(events, 3))
+    self.assertEqual([0], self.enc.events_to_input(events, 4))
+
+  def testEncode(self):
+    events = [0, 1, 0, 2, 0]
+    sequence_example = self.enc.encode(events)
+    expected_inputs = [[0], [1], [0], [2]]
+    expected_labels = [1, 0, 2, 0]
+    expected_sequence_example = sequence_example_lib.make_sequence_example(
+        expected_inputs, expected_labels)
+    self.assertEqual(sequence_example, expected_sequence_example)
+
+  def testGetInputsBatch(self):
+    event_sequences = [[0, 1, 0, 2, 0], [0, 1, 2]]
+    expected_inputs_1 = [[0], [1], [0], [2], [0]]
+    expected_inputs_2 = [[0], [1], [2]]
+    expected_full_length_inputs_batch = [expected_inputs_1, expected_inputs_2]
+    expected_last_event_inputs_batch = [expected_inputs_1[-1:],
+                                        expected_inputs_2[-1:]]
+    self.assertListEqual(
+        expected_full_length_inputs_batch,
+        self.enc.get_inputs_batch(event_sequences, True))
+    self.assertListEqual(
+        expected_last_event_inputs_batch,
+        self.enc.get_inputs_batch(event_sequences))
 
 
 class LookbackEventSequenceEncoderDecoderTest(tf.test.TestCase):
 
   def setUp(self):
     self.enc = encoder_decoder.LookbackEventSequenceEncoderDecoder(
-        testing_lib.TrivialOneHotEncoding(3), [1, 2], 2)
+        testing_lib.TrivialOneHotEncoding(3, num_steps=range(3)), [1, 2], 2)
 
   def testInputSize(self):
     self.assertEqual(13, self.enc.input_size)
@@ -176,6 +227,13 @@ class LookbackEventSequenceEncoderDecoderTest(tf.test.TestCase):
     self.assertEqual(0, self.enc.class_index_to_event(3, events[:5]))
     self.assertEqual(2, self.enc.class_index_to_event(4, events[:5]))
 
+  def testLabelsToNumSteps(self):
+    labels = [0, 1, 0, 2, 0]
+    self.assertEqual(3, self.enc.labels_to_num_steps(labels))
+
+    labels = [0, 1, 3, 2, 4]
+    self.assertEqual(5, self.enc.labels_to_num_steps(labels))
+
   def testEmptyLookback(self):
     enc = encoder_decoder.LookbackEventSequenceEncoderDecoder(
         testing_lib.TrivialOneHotEncoding(3), [], 2)
@@ -228,7 +286,7 @@ class ConditionalEventSequenceEncoderDecoderTest(tf.test.TestCase):
             testing_lib.TrivialOneHotEncoding(3)))
 
   def testInputSize(self):
-    self.assertEquals(5, self.enc.input_size)
+    self.assertEqual(5, self.enc.input_size)
 
   def testNumClasses(self):
     self.assertEqual(3, self.enc.num_classes)
@@ -277,7 +335,7 @@ class ConditionalEventSequenceEncoderDecoderTest(tf.test.TestCase):
     self.assertEqual(sequence_example, expected_sequence_example)
 
   def testGetInputsBatch(self):
-    control_events = [1, 1, 1, 0, 0]
+    control_event_sequences = [[1, 1, 1, 0, 0], [1, 1, 1, 0, 0]]
     target_event_sequences = [[0, 1, 0, 2], [0, 1]]
     expected_inputs_1 = [[0.0, 1.0, 1.0, 0.0, 0.0],
                          [0.0, 1.0, 0.0, 1.0, 0.0],
@@ -290,17 +348,20 @@ class ConditionalEventSequenceEncoderDecoderTest(tf.test.TestCase):
                                         expected_inputs_2[-1:]]
     self.assertListEqual(
         expected_full_length_inputs_batch,
-        self.enc.get_inputs_batch(control_events, target_event_sequences, True))
+        self.enc.get_inputs_batch(
+            control_event_sequences, target_event_sequences, True))
     self.assertListEqual(
         expected_last_event_inputs_batch,
-        self.enc.get_inputs_batch(control_events, target_event_sequences))
+        self.enc.get_inputs_batch(
+            control_event_sequences, target_event_sequences))
 
   def testExtendEventSequences(self):
     target_events_1 = [0]
     target_events_2 = [0]
     target_events_3 = [0]
     target_event_sequences = [target_events_1, target_events_2, target_events_3]
-    softmax = [[[0.0, 0.0, 1.0]], [[1.0, 0.0, 0.0]], [[0.0, 1.0, 0.0]]]
+    softmax = np.array(
+        [[[0.0, 0.0, 1.0]], [[1.0, 0.0, 0.0]], [[0.0, 1.0, 0.0]]])
     self.enc.extend_event_sequences(target_event_sequences, softmax)
     self.assertListEqual(list(target_events_1), [0, 2])
     self.assertListEqual(list(target_events_2), [0, 0])
@@ -310,11 +371,71 @@ class ConditionalEventSequenceEncoderDecoderTest(tf.test.TestCase):
     target_events_1 = [0, 1, 0]
     target_events_2 = [1, 2, 2]
     target_event_sequences = [target_events_1, target_events_2]
-    softmax = [[[0.0, 0.5, 0.5], [0.3, 0.4, 0.3], [0.4, 0.6, 0.0]],
-               [[0.0, 0.6, 0.4], [0.0, 0.4, 0.6], [0.1, 0.1, 0.8]]]
+    softmax = [[[0.0, 0.5, 0.5], [0.3, 0.4, 0.3]],
+               [[0.0, 0.6, 0.4], [0.0, 0.4, 0.6]]]
     p = self.enc.evaluate_log_likelihood(target_event_sequences, softmax)
     self.assertListEqual([np.log(0.5) + np.log(0.3),
                           np.log(0.4) + np.log(0.6)], p)
+
+
+class OptionalEventSequenceEncoderTest(tf.test.TestCase):
+
+  def setUp(self):
+    self.enc = encoder_decoder.OptionalEventSequenceEncoder(
+        encoder_decoder.OneHotEventSequenceEncoderDecoder(
+            testing_lib.TrivialOneHotEncoding(3)))
+
+  def testInputSize(self):
+    self.assertEqual(4, self.enc.input_size)
+
+  def testEventsToInput(self):
+    events = [(False, 0), (False, 1), (False, 0), (True, 2), (True, 0)]
+    self.assertEqual(
+        [0.0, 1.0, 0.0, 0.0],
+        self.enc.events_to_input(events, 0))
+    self.assertEqual(
+        [0.0, 0.0, 1.0, 0.0],
+        self.enc.events_to_input(events, 1))
+    self.assertEqual(
+        [0.0, 1.0, 0.0, 0.0],
+        self.enc.events_to_input(events, 2))
+    self.assertEqual(
+        [1.0, 0.0, 0.0, 0.0],
+        self.enc.events_to_input(events, 3))
+    self.assertEqual(
+        [1.0, 0.0, 0.0, 0.0],
+        self.enc.events_to_input(events, 4))
+
+
+class MultipleEventSequenceEncoderTest(tf.test.TestCase):
+
+  def setUp(self):
+    self.enc = encoder_decoder.MultipleEventSequenceEncoder([
+        encoder_decoder.OneHotEventSequenceEncoderDecoder(
+            testing_lib.TrivialOneHotEncoding(2)),
+        encoder_decoder.OneHotEventSequenceEncoderDecoder(
+            testing_lib.TrivialOneHotEncoding(3))])
+
+  def testInputSize(self):
+    self.assertEqual(5, self.enc.input_size)
+
+  def testEventsToInput(self):
+    events = [(1, 0), (1, 1), (1, 0), (0, 2), (0, 0)]
+    self.assertEqual(
+        [0.0, 1.0, 1.0, 0.0, 0.0],
+        self.enc.events_to_input(events, 0))
+    self.assertEqual(
+        [0.0, 1.0, 0.0, 1.0, 0.0],
+        self.enc.events_to_input(events, 1))
+    self.assertEqual(
+        [0.0, 1.0, 1.0, 0.0, 0.0],
+        self.enc.events_to_input(events, 2))
+    self.assertEqual(
+        [1.0, 0.0, 0.0, 0.0, 1.0],
+        self.enc.events_to_input(events, 3))
+    self.assertEqual(
+        [1.0, 0.0, 1.0, 0.0, 0.0],
+        self.enc.events_to_input(events, 4))
 
 
 if __name__ == '__main__':
