@@ -11,27 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
-Methods for building real-time arbitrary image stylization model
-using MobileNetV2
-"""
+"""Methods for building arbitrary image stylization model with MobileNetV2."""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
-
 from magenta.models.arbitrary_image_stylization import arbitrary_image_stylization_losses as losses
 from magenta.models.arbitrary_image_stylization import nza_model as transformer_model
 from magenta.models.image_stylization import ops
+import tensorflow as tf
 
 try:
-  from nets.mobilenet import mobilenet_v2, mobilenet
+  from nets.mobilenet import mobilenet_v2, mobilenet  # pylint:disable=g-import-not-at-top,g-multiple-import
 except ImportError:
-  print("Cannot import MobileNet model. Make sure to install slim "
-        "models library described "
-        "in https://github.com/tensorflow/models/tree/master/research/slim")
+  print('Cannot import MobileNet model. Make sure to install slim '
+        'models library described '
+        'in https://github.com/tensorflow/models/tree/master/research/slim')
   raise
 
 slim = tf.contrib.slim
@@ -127,8 +123,7 @@ def style_prediction_mobilenet(style_input_,
                                style_params_trainable=False,
                                style_prediction_bottleneck=100,
                                reuse=None):
-  """Maps style images to the style embeddings using MobileNetV2
-  (beta and gamma parameters).
+  """Maps style images to the style embeddings using MobileNetV2.
 
   Args:
     style_input_: Tensor. Batch of style input images.

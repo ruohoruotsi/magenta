@@ -23,14 +23,13 @@ import time
 import urllib
 import zipfile
 
+from magenta.models.sketch_rnn import model as sketch_rnn_model
+from magenta.models.sketch_rnn import utils
 import numpy as np
 import requests
 import six
 from six.moves import cStringIO as StringIO
 import tensorflow as tf
-
-from magenta.models.sketch_rnn import model as sketch_rnn_model
-from magenta.models.sketch_rnn import utils
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -114,10 +113,9 @@ def download_pretrained_models(
 def load_dataset(data_dir, model_params, inference_mode=False):
   """Loads the .npz file, and splits the set into train/valid/test."""
 
-  # normalizes the x and y columns usint the training set.
+  # normalizes the x and y columns using the training set.
   # applies same scaling factor to valid and test set.
 
-  datasets = []
   if isinstance(model_params.data_set, list):
     datasets = model_params.data_set
   else:
