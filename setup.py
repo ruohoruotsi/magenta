@@ -1,16 +1,17 @@
-# Copyright 2016 Google Inc. All Rights Reserved.
+# Copyright 2018 The Magenta Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#    http://www.apache.org/licenses/LICENSE-2.0
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """A setuptools based setup module for magenta."""
 
 import sys
@@ -43,14 +44,16 @@ REQUIRED_PACKAGES = [
     'matplotlib >= 1.5.3',
     'mido == 1.2.6',
     'mir_eval >= 0.4',
-    'numpy >= 1.11.0',
+    'numpy == 1.13.3',  # higher versions confuse pylint.
     'pandas >= 0.18.1',
     'pretty_midi >= 0.2.6',
     'protobuf',
-    'python-rtmidi',
+    'pygtrie >= 2.3',
+    'python-rtmidi >= 1.1, < 1.2',  # 1.2 breaks us
     'scipy >= 0.18.1',
     'sk-video',
     'sonnet',
+    'sox >= 1.3.7',
     'tensorflow-probability >= 0.5.0',
     'tensor2tensor >= 1.10.0',
     'wheel',
@@ -82,6 +85,8 @@ CONSOLE_SCRIPTS = [
     'magenta.models.improv_rnn.improv_rnn_create_dataset',
     'magenta.models.improv_rnn.improv_rnn_generate',
     'magenta.models.improv_rnn.improv_rnn_train',
+    'magenta.models.gansynth.gansynth_train',
+    'magenta.models.gansynth.gansynth_generate',
     'magenta.models.melody_rnn.melody_rnn_create_dataset',
     'magenta.models.melody_rnn.melody_rnn_generate',
     'magenta.models.melody_rnn.melody_rnn_train',
@@ -89,7 +94,8 @@ CONSOLE_SCRIPTS = [
     'magenta.models.music_vae.music_vae_train',
     'magenta.models.nsynth.wavenet.nsynth_generate',
     'magenta.models.nsynth.wavenet.nsynth_save_embeddings',
-    'magenta.models.onsets_frames_transcription.onsets_frames_transcription_create_dataset',
+    'magenta.models.onsets_frames_transcription.onsets_frames_transcription_create_dataset_maps',
+    'magenta.models.onsets_frames_transcription.onsets_frames_transcription_create_dataset_maestro',
     'magenta.models.onsets_frames_transcription.onsets_frames_transcription_infer',
     'magenta.models.onsets_frames_transcription.onsets_frames_transcription_train',
     'magenta.models.onsets_frames_transcription.onsets_frames_transcription_transcribe',

@@ -1,16 +1,17 @@
-# Copyright 2018 Google Inc. All Rights Reserved.
+# Copyright 2018 The Magenta Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#    http://www.apache.org/licenses/LICENSE-2.0
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """Performance generation from score in Tensor2Tensor."""
 
 from __future__ import absolute_import
@@ -42,9 +43,9 @@ MAX_PITCH = 108
 
 # pylint: disable=line-too-long
 MAESTRO_TFRECORD_PATHS = {
-    'train': 'gs://magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_train.tfrecord',
-    'dev': 'gs://magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_validation.tfrecord',
-    'test': 'gs://magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_test.tfrecord'
+    'train': '/bigstore/magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_train.tfrecord',
+    'dev': '/bigstore/magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_validation.tfrecord',
+    'test': '/bigstore/magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_test.tfrecord'
 }
 # pylint: enable=line-too-long
 
@@ -158,14 +159,14 @@ class Score2PerfProblem(problem.Problem):
   def hparams(self, defaults, model_hparams):
     del model_hparams   # unused
     perf_encoder = self.get_feature_encoders()['targets']
-    defaults.modality = {'targets': t2t_modalities.SymbolModality}
+    defaults.modality = {'targets': t2t_modalities.ModalityType.SYMBOL}
     defaults.vocab_size = {'targets': perf_encoder.vocab_size}
     if self.has_inputs:
       score_encoder = self.get_feature_encoders()['inputs']
       if isinstance(score_encoder.vocab_size, list):
         modality_cls = modalities.SymbolTupleModality
       else:
-        modality_cls = t2t_modalities.SymbolModality
+        modality_cls = t2t_modalities.ModalityType.SYMBOL
       defaults.modality['inputs'] = modality_cls
       defaults.vocab_size['inputs'] = score_encoder.vocab_size
 
