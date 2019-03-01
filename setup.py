@@ -1,4 +1,4 @@
-# Copyright 2018 The Magenta Authors.
+# Copyright 2019 The Magenta Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,13 +44,13 @@ REQUIRED_PACKAGES = [
     'matplotlib >= 1.5.3',
     'mido == 1.2.6',
     'mir_eval >= 0.4',
-    'numpy == 1.13.3',  # higher versions confuse pylint.
+    'numpy >= 1.14.6, <= 1.15.4',  # higher versions confuse pylint.
     'pandas >= 0.18.1',
     'pretty_midi >= 0.2.6',
-    'protobuf',
+    'protobuf >= 3.6.1',
     'pygtrie >= 2.3',
     'python-rtmidi >= 1.1, < 1.2',  # 1.2 breaks us
-    'scipy >= 0.18.1',
+    'scipy >= 0.18.1, <= 1.2.0',  # 1.2.1 causes segfaults in pytest.
     'sk-video',
     'sonnet',
     'sox >= 1.3.7',
@@ -58,7 +58,7 @@ REQUIRED_PACKAGES = [
     'tensor2tensor >= 1.10.0',
     'wheel',
     'futures;python_version=="2.7"',
-    'apache-beam >= 2.8.0;python_version=="2.7"',
+    'apache-beam[gcp] >= 2.8.0;python_version=="2.7"',
 ]
 
 if gpu_mode:
@@ -153,5 +153,9 @@ setup(
         'magenta': ['models/image_stylization/evaluation_images/*.jpg'],
     },
     setup_requires=['pytest-runner', 'pytest-pylint'],
-    tests_require=['pytest', 'pylint'],
+    tests_require=[
+        'pytest',
+        'pylint < 2.0.0;python_version<"3"',
+        'pylint >= 2.0.0;python_version>="3"',
+    ],
 )

@@ -1,4 +1,4 @@
-# Copyright 2018 The Magenta Authors.
+# Copyright 2019 The Magenta Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -43,9 +43,9 @@ MAX_PITCH = 108
 
 # pylint: disable=line-too-long
 MAESTRO_TFRECORD_PATHS = {
-    'train': '/bigstore/magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_train.tfrecord',
-    'dev': '/bigstore/magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_validation.tfrecord',
-    'test': '/bigstore/magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_test.tfrecord'
+    'train': 'gs://magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_train.tfrecord',
+    'dev': 'gs://magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_validation.tfrecord',
+    'test': 'gs://magentadata/datasets/maestro/v1.0.0/maestro-v1.0.0_test.tfrecord'
 }
 # pylint: enable=line-too-long
 

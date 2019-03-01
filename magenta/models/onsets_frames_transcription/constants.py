@@ -1,4 +1,4 @@
-# Copyright 2018 The Magenta Authors.
+# Copyright 2019 The Magenta Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,13 +42,11 @@ MIDI_PITCHES = MAX_MIDI_PITCH - MIN_MIDI_PITCH + 1
 
 MAX_MIDI_VELOCITY = 127
 
-DEFAULT_CROP_TRAINING_SEQUENCE_TO_NOTES = False
 DEFAULT_ONSET_MODE = 'length_ms'
 DEFAULT_ONSET_LENGTH = 100
 DEFAULT_ONSET_DELAY = 0
 DEFAULT_MIN_FRAME_OCCUPANCY_FOR_LABEL = 0.0
 DEFAULT_JITTER_AMOUNT_MS = 0
-DEFAULT_NORMALIZE_AUDIO = False
 DEFAULT_MIN_DURATION_MS = 0
 DEFAULT_BACKWARD_SHIFT_AMOUNT_MS = 0
 DEFAULT_BIDIRECTIONAL = True
@@ -64,8 +62,6 @@ DEFAULT_AUDIO_HPARAMS = tf.contrib.training.HParams(
     spec_n_bins=DEFAULT_SPEC_N_BINS,
     spec_fmin=DEFAULT_SPEC_FMIN,
     cqt_bins_per_octave=DEFAULT_CQT_BINS_PER_OCTAVE,
-    normalize_audio=DEFAULT_NORMALIZE_AUDIO,
-    crop_training_sequence_to_notes=DEFAULT_CROP_TRAINING_SEQUENCE_TO_NOTES,
     onset_length=DEFAULT_ONSET_LENGTH,
     offset_length=DEFAULT_OFFSET_LENGTH,
     onset_mode=DEFAULT_ONSET_MODE,

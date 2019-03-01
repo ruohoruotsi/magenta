@@ -11,6 +11,8 @@ We have since made improvements to the model and released a new [training datase
 
 The code in this directory corresponds to the latest version from the MAESTRO paper. For code corresponding to the Onsets and Frames paper, please browse the repository at commit [9885adef](https://github.com/tensorflow/magenta/tree/9885adef56d134763a89de5584f7aa18ca7d53b6). Note that we can only provide support for the code at HEAD.
 
+You may also be interested in a [PyTorch Onsets and Frames](https://github.com/jongwook/onsets-and-frames) implementation by [Jong Wook Kim](https://github.com/jongwook) (not supported by the Magenta team).
+
 ## JavaScript App
 
 The easiest way to try out the model is with our web app: [Piano Scribe](https://goo.gl/magenta/piano-scribe). You can try transcribing audio files right in your browser without installing any software. You can read more about it on our blog post, [Piano Transcription in the Browser with Onsets and Frames](http://g.co/magenta/oaf-js).
@@ -31,9 +33,9 @@ which is trained on the [MAESTRO dataset](https://g.co/magenta/maestro-dataset).
 After unzipping that checkpoint, you can run the following command:
 
 ```bash
-CHECKPOINT_DIR=<path to unzipped checkpoint, should have 'train' subdir>
+MODEL_DIR=<path to directory containing checkpoint>
 onsets_frames_transcription_transcribe \
-  --acoustic_run_dir="${CHECKPOINT_DIR}" \
+  --model_dir="${CHECKPOINT_DIR}" \
   <piano_recording1.wav, piano_recording2.wav, ...>
 ```
 
@@ -112,16 +114,19 @@ onsets_frames_transcription_train \
   --mode='train'
 ```
 
-You can also run an eval job during training to check approximate metrics:
+You can also run an eval job during training to check metrics:
 
 ```bash
 TEST_EXAMPLES=<path to eval tfrecord(s) generated during dataset creation>
-RUN_DIR=<path where checkpoints should be loaded and summary events should be saved>
+MODEL_DIR=<path where checkpoints should be loaded>
+OUTPUT_DIR=$MODEL_DIR/eval
 
-onsets_frames_transcription_train \
+onsets_frames_transcription_infer \
   --examples_path="${TEST_EXAMPLES}" \
-  --run_dir="${RUN_DIR}" \
-  --mode='eval'
+  --model_dir="${MODEL_DIR}" \
+  --output_dir="${OUTPUT_DIR}" \
+  --hparams="use_cudnn=false" \
+  --eval_loop
 ```
 
 During training, you can check on progress using TensorBoard:
@@ -135,14 +140,14 @@ tensorboard --logdir="${RUN_DIR}"
 To get final performance metrics for the model, run the `onsets_frames_transcription_infer` script.
 
 ```bash
-CHECKPOINT_DIR=${RUN_DIR}
+MODEL_DIR=<path where checkpoints should be loaded>
 TEST_EXAMPLES=<path to eval tfrecord(s) generated during dataset creation>
-RUN_DIR=<path where output should be saved>
+OUTPUT_DIR=<path where output should be saved>
 
 onsets_frames_transcription_infer \
-  --acoustic_run_dir="${CHECKPOINT_DIR}" \
+  --model_dir="${CHECKPOINT_DIR}" \
   --examples_path="${TEST_EXAMPLES}" \
-  --run_dir="${RUN_DIR}"
+  --output_dir="${RUN_DIR}"
 ```
 
 You can check on the metrics resulting from inference using TensorBoard:
