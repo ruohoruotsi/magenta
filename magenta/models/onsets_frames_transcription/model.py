@@ -382,11 +382,17 @@ def model_fn(features, labels, mode, params, config):
         tf.losses.add_loss(tf.reduce_mean(activation_losses))
         losses['activation'] = activation_losses
 
+  frame_predictions = frame_probs_flat > hparams.predict_frame_threshold
+  onset_predictions = onset_probs_flat > hparams.predict_onset_threshold
+  offset_predictions = offset_probs_flat > hparams.predict_offset_threshold
+
   predictions = {
-      'frame_probs_flat': frame_probs_flat,
-      'onset_probs_flat': onset_probs_flat,
-      'offset_probs_flat': offset_probs_flat,
-      'velocity_values_flat': velocity_values_flat,
+      # frame_probs is exported for writing out piano roll during inference.
+      'frame_probs': frame_probs_flat,
+      'frame_predictions': frame_predictions,
+      'onset_predictions': onset_predictions,
+      'offset_predictions': offset_predictions,
+      'velocity_values': velocity_values_flat,
   }
 
   train_op = None
@@ -447,31 +453,20 @@ def get_default_hparams():
   """
   return tf.contrib.training.HParams(
       batch_size=8,
-      spec_fmin=30.0,
-      spec_n_bins=229,
-      spec_type='mel',
-      spec_mel_htk=True,
-      spec_log_amplitude=True,
-      transform_audio=True,
       learning_rate=0.0006,
+      decay_steps=10000,
+      decay_rate=0.98,
       clip_norm=3.0,
-      truncated_length=1500,  # 48 seconds
+      transform_audio=True,
       onset_lstm_units=256,
       offset_lstm_units=256,
       velocity_lstm_units=0,
       frame_lstm_units=0,
       combined_lstm_units=256,
-      onset_mode='length_ms',
       acoustic_rnn_stack_size=1,
       combined_rnn_stack_size=1,
-      # using this will result in output not aligning with audio.
-      backward_shift_amount_ms=0,
       activation_loss=False,
       stop_activation_gradient=False,
-      onset_length=32,
-      offset_length=32,
-      decay_steps=10000,
-      decay_rate=0.98,
       stop_onset_gradient=True,
       stop_offset_gradient=True,
       weight_frame_and_activation_loss=False,
@@ -487,5 +482,7 @@ def get_default_hparams():
       use_cudnn=True,
       rnn_dropout_drop_amt=0.0,
       bidirectional=True,
-      onset_overlap=True,
+      predict_frame_threshold=0.5,
+      predict_onset_threshold=0.5,
+      predict_offset_threshold=0,
   )

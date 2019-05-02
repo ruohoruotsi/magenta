@@ -82,12 +82,13 @@ def musicnet_iterator(musicnet_file):
     kHz) and the second element is a NoteSequence proto containing the
     transcription.
   """
-  with tf.gfile.FastGFile(musicnet_file, 'rb') as f:
+  with tf.gfile.GFile(musicnet_file, 'rb') as f:
     # Unfortunately the gfile seek function breaks the reading of NumPy
     # archives, so we read the archive first then load as BytesIO.
     musicnet_bytes = f.read()
     musicnet_bytesio = BytesIO(musicnet_bytes)
-    musicnet = np.load(musicnet_bytesio, encoding='latin1')
+    # allow_pickle is required because the npz files contain intervaltrees.
+    musicnet = np.load(musicnet_bytesio, encoding='latin1', allow_pickle=True)
 
   for file_id in musicnet.files:
     audio, note_interval_tree = musicnet[file_id]

@@ -257,12 +257,13 @@ class SequencesLibTest(tf.test.TestCase):
         expected_subsequence, 0, [(0.0, 64, 0), (1.5, 64, 127)])
     testing_lib.add_control_changes_to_sequence(
         expected_subsequence, 1, [(0.0, 64, 127)])
-    expected_subsequence.control_changes.sort(key=lambda cc: cc.time)
     expected_subsequence.total_time = 1.51
     expected_subsequence.subsequence_info.start_time_offset = 2.5
     expected_subsequence.subsequence_info.end_time_offset = 5.99
 
     subsequence = sequences_lib.extract_subsequence(sequence, 2.5, 4.75)
+    subsequence.control_changes.sort(
+        key=lambda cc: (cc.instrument, cc.time))
     self.assertProtoEquals(expected_subsequence, subsequence)
 
   def testExtractSubsequencePastEnd(self):
@@ -276,6 +277,43 @@ class SequencesLibTest(tf.test.TestCase):
 
     with self.assertRaises(ValueError):
       sequences_lib.extract_subsequence(sequence, 15.0, 16.0)
+
+  def testExtractSubsequencePedalEvents(self):
+    sequence = copy.copy(self.note_sequence)
+    testing_lib.add_track_to_sequence(
+        sequence, 0, [(60, 80, 2.5, 5.0)])
+    testing_lib.add_control_changes_to_sequence(
+        sequence, 0,
+        [(0.0, 64, 127), (2.0, 64, 0), (4.0, 64, 127), (5.0, 64, 0)])
+    testing_lib.add_control_changes_to_sequence(
+        sequence, 1, [(2.0, 64, 127)])
+    testing_lib.add_control_changes_to_sequence(
+        sequence, 0,
+        [(0.0, 66, 0), (2.0, 66, 127), (4.0, 66, 0), (5.0, 66, 127)])
+    testing_lib.add_control_changes_to_sequence(
+        sequence, 0,
+        [(0.0, 67, 10), (2.0, 67, 20), (4.0, 67, 30), (5.0, 67, 40)])
+    expected_subsequence = copy.copy(self.note_sequence)
+    testing_lib.add_track_to_sequence(
+        expected_subsequence, 0, [(60, 80, 0, 2.25)])
+    testing_lib.add_control_changes_to_sequence(
+        expected_subsequence, 0, [(0.0, 64, 0), (1.5, 64, 127)])
+    testing_lib.add_control_changes_to_sequence(
+        expected_subsequence, 1, [(0.0, 64, 127)])
+    testing_lib.add_control_changes_to_sequence(
+        expected_subsequence, 0, [(0.0, 66, 127), (1.5, 66, 0)])
+    testing_lib.add_control_changes_to_sequence(
+        expected_subsequence, 0, [(0.0, 67, 20), (1.5, 67, 30)])
+    expected_subsequence.control_changes.sort(
+        key=lambda cc: (cc.instrument, cc.control_number, cc.time))
+    expected_subsequence.total_time = 2.25
+    expected_subsequence.subsequence_info.start_time_offset = 2.5
+    expected_subsequence.subsequence_info.end_time_offset = .25
+
+    subsequence = sequences_lib.extract_subsequence(sequence, 2.5, 4.75)
+    subsequence.control_changes.sort(
+        key=lambda cc: (cc.instrument, cc.control_number, cc.time))
+    self.assertProtoEquals(expected_subsequence, subsequence)
 
   def testSplitNoteSequenceWithHopSize(self):
     # Tests splitting a NoteSequence at regular hop size, truncating notes.
@@ -1876,6 +1914,33 @@ class SequencesLibTest(tf.test.TestCase):
     self.assertEqual(80 / DEFAULT_FRAMES_PER_SECOND,
                      sequence.notes[1].start_time)
     self.assertEqual(81 / DEFAULT_FRAMES_PER_SECOND, sequence.notes[1].end_time)
+
+  def testPianorollToNoteSequenceWithOnsetsAndVelocity(self):
+    # 100 frames of notes and onsets.
+    frames = np.zeros((100, MIDI_PITCHES), np.bool)
+    onsets = np.zeros((100, MIDI_PITCHES), np.bool)
+    velocity_values = np.zeros((100, MIDI_PITCHES), np.float32)
+    # Activate key 39 for the middle 50 frames and last 10 frames.
+    frames[25:75, 39] = True
+    frames[90:100, 39] = True
+    # Add an onset for the first occurrence with a valid velocity.
+    onsets[25, 39] = True
+    velocity_values[25, 39] = 0.5
+    # Add an onset for the second occurrence with a NaN velocity.
+    onsets[90, 39] = True
+    velocity_values[90, 39] = float('nan')
+    sequence = sequences_lib.pianoroll_to_note_sequence(
+        frames,
+        frames_per_second=DEFAULT_FRAMES_PER_SECOND,
+        min_duration_ms=0,
+        onset_predictions=onsets,
+        velocity_values=velocity_values)
+    self.assertEqual(2, len(sequence.notes))
+
+    self.assertEqual(39, sequence.notes[0].pitch)
+    self.assertEqual(50, sequence.notes[0].velocity)
+    self.assertEqual(39, sequence.notes[1].pitch)
+    self.assertEqual(0, sequence.notes[1].velocity)
 
   def testPianorollToNoteSequenceWithOnsetsOverlappingFrames(self):
     # 100 frames of notes and onsets.

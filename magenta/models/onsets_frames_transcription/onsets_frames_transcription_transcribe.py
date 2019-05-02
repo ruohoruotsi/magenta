@@ -20,10 +20,9 @@ from __future__ import print_function
 
 import os
 
-from magenta.common import tf_utils
+from magenta.models.onsets_frames_transcription import configs
 from magenta.models.onsets_frames_transcription import constants
 from magenta.models.onsets_frames_transcription import data
-from magenta.models.onsets_frames_transcription import model
 from magenta.models.onsets_frames_transcription import split_audio_and_label_data
 from magenta.models.onsets_frames_transcription import train_util
 from magenta.music import midi_io
@@ -33,6 +32,8 @@ import tensorflow as tf
 
 FLAGS = tf.app.flags.FLAGS
 
+tf.app.flags.DEFINE_string('config', 'onsets_frames',
+                           'Name of the config to use.')
 tf.app.flags.DEFINE_string('model_dir', None,
                            'Path to look for acoustic checkpoints.')
 tf.app.flags.DEFINE_string(
@@ -43,12 +44,6 @@ tf.app.flags.DEFINE_string(
     'hparams',
     '',
     'A comma-separated list of `name=value` hyperparameter values.')
-tf.app.flags.DEFINE_float(
-    'frame_threshold', 0.5,
-    'Threshold to use when sampling from the acoustic model.')
-tf.app.flags.DEFINE_float(
-    'onset_threshold', 0.5,
-    'Threshold to use when sampling from the acoustic model.')
 tf.app.flags.DEFINE_string(
     'log', 'INFO',
     'The threshold for what messages will be logged: '
@@ -57,12 +52,13 @@ tf.app.flags.DEFINE_string(
 
 def create_example(filename):
   """Processes an audio file into an Example proto."""
-  wav_data = tf.gfile.Open(filename).read()
+  wav_data = tf.gfile.Open(filename, 'rb').read()
   example_list = list(
       split_audio_and_label_data.process_record(
           wav_data=wav_data,
           ns=music_pb2.NoteSequence(),
-          example_id=filename,
+          # decode to handle filenames with extended characters.
+          example_id=filename.decode('utf-8'),
           min_length=0,
           max_length=-1,
           allow_empty_notesequence=True))
@@ -70,11 +66,11 @@ def create_example(filename):
   return example_list[0].SerializeToString()
 
 
-def transcribe_audio(prediction, hparams, frame_threshold, onset_threshold):
+def transcribe_audio(prediction, hparams):
   """Transcribes an audio file."""
-  frame_predictions = prediction['frame_probs_flat'] > frame_threshold
-  onset_predictions = prediction['onset_probs_flat'] > onset_threshold
-  velocity_values = prediction['velocity_values_flat']
+  frame_predictions = prediction['frame_predictions']
+  onset_predictions = prediction['onset_predictions']
+  velocity_values = prediction['velocity_values']
 
   sequence_prediction = sequences_lib.pianoroll_to_note_sequence(
       frame_predictions,
@@ -90,25 +86,26 @@ def transcribe_audio(prediction, hparams, frame_threshold, onset_threshold):
 def main(argv):
   tf.logging.set_verbosity(FLAGS.log)
 
-  hparams = tf_utils.merge_hparams(
-      constants.DEFAULT_HPARAMS, model.get_default_hparams())
+  config = configs.CONFIG_MAP[FLAGS.config]
+  hparams = config.hparams
   # For this script, default to not using cudnn.
   hparams.use_cudnn = False
   hparams.parse(FLAGS.hparams)
   hparams.batch_size = 1
+  hparams.truncated_length_secs = 0
 
   with tf.Graph().as_default():
     examples = tf.placeholder(tf.string, [None])
 
     dataset = data.provide_batch(
-        batch_size=1,
         examples=examples,
+        preprocess_examples=True,
         hparams=hparams,
-        is_training=False,
-        truncated_length=0)
+        is_training=False)
 
-    estimator = train_util.create_estimator(
-        os.path.expanduser(FLAGS.model_dir), hparams)
+    estimator = train_util.create_estimator(config.model_fn,
+                                            os.path.expanduser(FLAGS.model_dir),
+                                            hparams)
 
     iterator = dataset.make_initializable_iterator()
     next_record = iterator.get_next()
@@ -129,7 +126,8 @@ def main(argv):
         tf.logging.info('Processing file...')
         sess.run(iterator.initializer, {examples: [create_example(filename)]})
 
-        def input_fn():
+        def input_fn(params):
+          del params
           return tf.data.Dataset.from_tensors(sess.run(next_record))
 
         tf.logging.info('Running inference...')
@@ -143,9 +141,7 @@ def main(argv):
                 yield_single_examples=False))
         assert len(prediction_list) == 1
 
-        sequence_prediction = transcribe_audio(prediction_list[0], hparams,
-                                               FLAGS.frame_threshold,
-                                               FLAGS.onset_threshold)
+        sequence_prediction = transcribe_audio(prediction_list[0], hparams)
 
         midi_filename = filename + '.midi'
         midi_io.sequence_proto_to_midi_file(sequence_prediction, midi_filename)
